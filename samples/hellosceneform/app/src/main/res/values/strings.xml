@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Copyright 2018 Google LLC.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+<resources>
+    <string name="app_name">Hello Sceneform</string>
+    <string name="splash_spinner">Splash Spinner</string>
+    <string name="splash_logo">Splash Logo</string>
+    <string name="poster_scan_message">Point device at poster then press scan ↓</string>
+    <string name="rescanning_message">Not the right poster? Try rescanning</string>
+    <string name="point_camera_message">Point camera at poster to continue</string>
+    <string name="poster_name_message">-Poster has no name-</string>
+    <string name="poster_found_message">Poster Found</string>
+    <string name="fit_poster_within_brackets_and_click_scan">Fit poster within brackets and click scan</string>
+</resources>
