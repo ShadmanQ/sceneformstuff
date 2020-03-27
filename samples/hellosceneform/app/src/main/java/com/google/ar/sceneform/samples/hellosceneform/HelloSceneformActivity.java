@@ -30,6 +30,7 @@ import android.view.MotionEvent;
 import android.widget.ImageView;
 import android.widget.Toast;
 import com.google.ar.core.Anchor;
+import com.google.ar.core.AugmentedImage;
 import com.google.ar.core.AugmentedImageDatabase;
 import com.google.ar.core.Config;
 import com.google.ar.core.HitResult;
@@ -104,11 +105,13 @@ public class HelloSceneformActivity extends AppCompatActivity {
               toast.show();
               return null;
             });
+    Thread apiThread = new Thread(()->{
+        String apiRes = api.fetchARExperience("d4f74b5e-1ddf-11ea-9a0b-1fd7f8b74283");
+        runOnUiThread(()->Toast.makeText(this, apiRes, Toast.LENGTH_LONG).show());
+    });
 
-/*
-    String response = api.fetchARExperience("d4f74b5e-1ddf-11ea-9a0b-1fd7f8b74283");
-    Log.d("API_RESPONSE_ONCREATE",response);
-*/
+    apiThread.start();
+
 
     arFragment.setOnTapArPlaneListener(
         (HitResult hitResult, Plane plane, MotionEvent motionEvent) -> {
@@ -256,8 +259,6 @@ public void SetUpExperience(){
                   } catch (JSONException e){
 
                   }
-
-
                   runOnUiThread(() -> {
                       AugmentedAssetNode node = new AugmentedAssetNode(this, assetInfoObject);
                       AssetNodes.add(node);
