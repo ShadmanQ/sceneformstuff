@@ -38,6 +38,7 @@ import com.google.ar.core.Session;
 import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.rendering.ModelRenderable;
 import com.google.ar.sceneform.rendering.Renderable;
+import com.google.ar.sceneform.rendering.ViewRenderable;
 import com.google.ar.sceneform.samples.hellosceneform.utils.AnalyticsManager;
 import com.google.ar.sceneform.samples.hellosceneform.AssetNodes.AugmentedAssetNode;
 import com.google.ar.sceneform.samples.hellosceneform.AssetNodes.ExperienceSplashImageNode;
@@ -45,6 +46,7 @@ import com.google.ar.sceneform.ux.ArFragment;
 import com.google.ar.sceneform.ux.TransformableNode;
 import com.google.ar.sceneform.samples.hellosceneform.utils.API;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -64,10 +66,10 @@ public class HelloSceneformActivity extends AppCompatActivity {
   protected ExperienceSplashImageNode splashNode;
   protected Collection<AugmentedAssetNode> AssetNodes;
   public static com.google.ar.sceneform.samples.hellosceneform.utils.AnalyticsManager AnalyticsManager = new AnalyticsManager();
-
+  protected String current_uuid;
   private ArFragment arFragment;
   private ModelRenderable andyRenderable;
-  private Renderable testRenderable;
+  private ViewRenderable testRenderable;
   public static API api = new API();
   String metaData = "";
   public static LinkedList<AugmentedAssetNode> audioAndVideoNodes = new LinkedList<>();
@@ -136,9 +138,10 @@ public class HelloSceneformActivity extends AppCompatActivity {
 
           // Create the transformable andy and add it to the anchor.
           TransformableNode andy = new TransformableNode(arFragment.getTransformationSystem());
+
           andy.setParent(anchorNode);
+
           andy.setRenderable(andyRenderable);
-         // andy.setRenderable(testRenderable);
           andy.select();
         });
   }
@@ -190,6 +193,7 @@ public class HelloSceneformActivity extends AppCompatActivity {
           }
 
           AugmentedImageBitmap = bitmap;
+          current_uuid = marker_uuid;
 
           metaData = apiCall.fetchARExperience(marker_uuid);
 
@@ -220,10 +224,51 @@ public class HelloSceneformActivity extends AppCompatActivity {
           session.configure(config); //Pushing the new configuration into the current ARCore settings
           arFragment.getArSceneView().setupSession(session);
           runOnUiThread(()-> Toast.makeText(this, Integer.toString(augmentedImageDatabase.getNumImages()), Toast.LENGTH_SHORT).show());
+          SetUpExperience();
+      });
+      thread.start();
+  }
+public void SetUpExperience(){
+      Thread getDataThread = new Thread(()->{
+          Log.e(TAG, "SetupExperience: " + current_uuid);
+          Log.d(TAG, metaData); //meta data contains JSON of all the data associated with each component of the experience
+//            JSONArray arContent;
+          AnalyticsManager.setExperienceUUID(current_uuid);
+          try {
+              JSONArray assetInfo = new JSONObject(metaData).getJSONArray("asset_transform_info");
+              if (assetInfo.length()==0){
+                  runOnUiThread(()-> Toast.makeText(this, "No asset info", Toast.LENGTH_SHORT).show());
+              }
+              for (int i = 0; i < assetInfo.length(); i++) {
+                  JSONObject assetInfoObject = assetInfo.getJSONObject(i);
+                  String uuid = assetInfoObject.getString("uuid");
+                  String type = assetInfoObject.getString("type");
+
+                  try {
+                      if ((type.equals("message") || type.equals("link"))) {
+                          if (assetInfoObject.getString("text").isEmpty())
+                              continue;
+                      }
+
+                      if (!(type.equals("image") || type.equals("text"))) {
+                          AnalyticsManager.addEngagementAnalytic(uuid);
+                      }
+                  } catch (JSONException e){
+
+                  }
+
+
+                  runOnUiThread(() -> {
+                      AugmentedAssetNode node = new AugmentedAssetNode(this, assetInfoObject);
+                      AssetNodes.add(node);
+                      arFragment.getArSceneView().getScene().addChild(node);
+                  });
+              }
+          }catch (JSONException e){
+              e.printStackTrace();
+          }
 
       });
-
-      thread.start();
-
+      getDataThread.start();
   }
 }
