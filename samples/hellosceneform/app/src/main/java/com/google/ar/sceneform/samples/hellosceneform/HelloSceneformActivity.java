@@ -23,6 +23,7 @@ import android.os.Build;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
 //import android.support.v7.app.AppCompatActivity
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Gravity;
@@ -33,9 +34,11 @@ import com.google.ar.core.Anchor;
 import com.google.ar.core.AugmentedImage;
 import com.google.ar.core.AugmentedImageDatabase;
 import com.google.ar.core.Config;
+import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.core.Session;
+import com.google.ar.core.TrackingState;
 import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.rendering.ModelRenderable;
 import com.google.ar.sceneform.rendering.Renderable;
@@ -75,7 +78,12 @@ public class HelloSceneformActivity extends AppCompatActivity {
   String metaData = "";
   public static LinkedList<AugmentedAssetNode> audioAndVideoNodes = new LinkedList<>();
   public static boolean tracking = false;
+  protected boolean setupStarted = false;
+protected boolean experienceLoaded = false;
+protected boolean splashSetup = false;
+public boolean shouldWatermark = false;
 
+  @RequiresApi(api = VERSION_CODES.P)
   @Override
   @SuppressWarnings({"AndroidApiChecker", "FutureReturnValueIgnored"})
   // CompletableFuture requires api level 24
@@ -105,13 +113,6 @@ public class HelloSceneformActivity extends AppCompatActivity {
               toast.show();
               return null;
             });
-    Thread apiThread = new Thread(()->{
-        String apiRes = api.fetchARExperience("d4f74b5e-1ddf-11ea-9a0b-1fd7f8b74283");
-        runOnUiThread(()->Toast.makeText(this, apiRes, Toast.LENGTH_LONG).show());
-    });
-
-    apiThread.start();
-
 
     arFragment.setOnTapArPlaneListener(
         (HitResult hitResult, Plane plane, MotionEvent motionEvent) -> {
@@ -127,6 +128,14 @@ public class HelloSceneformActivity extends AppCompatActivity {
                       String marker_uuid = reader.getString("marker_uuid");
                       DownloadMarker(marker_uuid);
                       runOnUiThread(()-> Toast.makeText(this, marker_uuid, Toast.LENGTH_SHORT).show());
+                      Thread fetchThread = new Thread(()-> {
+                          String test = api.fetchARContentAssetURL(marker_uuid);
+                          DownloadMarker(marker_uuid);
+                          UpdateExperience();
+
+                      });
+                      fetchThread.start();
+
                     }catch (JSONException e){
                       runOnUiThread(()-> Toast.makeText(this, "Could not retrieve", Toast.LENGTH_SHORT).show());
                     }
@@ -178,6 +187,110 @@ public class HelloSceneformActivity extends AppCompatActivity {
     return true;
   }
 
+  @RequiresApi(api = VERSION_CODES.P)
+  private void UpdateExperience(){
+
+      Frame frame = arFragment.getArSceneView().getArFrame();
+
+//        if(splashNode == null)
+//            runOnUiThread(() -> splashNode = new ExperienceSplashImageNode(this));
+
+      // If there is no frame or ARCore is not tracking yet, just return.
+      if (frame == null || frame.getCamera().getTrackingState() != TrackingState.TRACKING) {
+          return;
+      }
+      Collection<AugmentedImage> updatedAugmentedImages = frame.getUpdatedTrackables(AugmentedImage.class);
+      for (AugmentedImage augmentedImage : updatedAugmentedImages){
+          switch (augmentedImage.getTrackingState()) { //Check if ARCore is tracking it
+              case PAUSED://read up on what this is!!
+                  // When an image is in PAUSED state, but the camera is not PAUSED, it has been detected,
+            //      runOnUiThread(() -> userInterface.viewDuringPause(true, shouldWatermark));
+
+                  String text = "Detected Image " + augmentedImage.getIndex();
+                  Log.d(TAG, "onUpdateFrame: " + text);
+                  break;
+
+              case TRACKING: //if Tracking -> do this
+//                    found = true;
+                  if (metaData == null) {
+                      //Alert Dialog if experience contained no data.
+//                        runOnUiThread(() -> createAlertDialog("Experience contains no data. ", "Poster experience found. Experience contains no data.", "DISMISS", "blueRectScan()"));
+//                        runOnUiThread(() -> {
+//                            userInterface.getScanButton().setOnClickListener(view -> ResetState());
+//                            userInterface.getScanButton().setImageResource(R.drawable.retake_button);
+//                        });
+               //       ResetState();
+//                        takePhoto();
+                      return;
+                  }
+
+                  if (augmentedImage.getTrackingMethod() == AugmentedImage.TrackingMethod.FULL_TRACKING) {
+      //                runOnUiThread(() -> userInterface.viewDuringPause(false, shouldWatermark));
+//                        found = true;
+
+                      if (splashSetup) {
+//                            found = true;
+                          splashNode.setImage(augmentedImage);
+                          arFragment.getArSceneView().getScene().addChild(splashNode);
+                          splashSetup = false;
+                      }
+
+                      if (!setupStarted) {
+                          setupStarted = true;
+                          splashSetup = true;
+                          Thread thread = new Thread(() -> SetupExperience());
+                          thread.start();
+//                            removeImageAnchors(augmentedImage.getIndex());
+                      }
+
+                      if (!tracking && experienceLoaded) { //if experience is loaded, start adding all the components...is done to only happen once
+                          tracking = true;
+
+                          splashNode.RemoveAnchor(this);
+
+                          //for GA.. start experience timer
+                          AnalyticsManager.startStopWatch();
+                          AnalyticsManager.startExperienceTimer();
+
+                          Log.d(TAG, "onUpdateFrame: Adding Nodes");
+//                            ImageView imageView = findViewById(ViewId);
+
+                          if (AssetNodes.size() != 0) {
+                              for (AugmentedAssetNode node : AssetNodes) {
+                                  node.RemoveAnchor(this);
+                              }
+                          }
+
+                          for (AugmentedAssetNode node : AssetNodes) {
+                              node.setImage(augmentedImage);
+                              arFragment.getArSceneView().getScene().addChild(node);
+                          }
+                      }
+                  } else if (augmentedImage.getTrackingMethod() == AugmentedImage.TrackingMethod.LAST_KNOWN_POSE) {
+                      //TODO: Implement Not tracking logic
+                      AnalyticsManager.pauseExperienceTimer();
+                    //  runOnUiThread(() -> userInterface.viewDuringPause(true, shouldWatermark));
+                  } else {
+                      //TODO: Implement Not tracking logic
+                      AnalyticsManager.pauseExperienceTimer();
+                      tracking = false;
+                  }
+                  break;
+              case STOPPED:
+                  tracking = false;
+
+                  //for GA.. stops the experience timer
+                  AnalyticsManager.pauseExperienceTimer();
+                  AnalyticsManager.pauseStopWatch();
+
+                  break;
+          }
+
+      }
+
+
+  }
+
   private void DownloadMarker(String marker_uuid){
       API apiCall = new API();
       AssetNodes = new ArrayList<>();
@@ -185,7 +298,6 @@ public class HelloSceneformActivity extends AppCompatActivity {
           augmentedImageDatabase = new AugmentedImageDatabase(Objects.requireNonNull(arFragment.getArSceneView().getSession()));
 
       Thread thread = new Thread(()->{
-          runOnUiThread(()-> Toast.makeText(this, "starting DownloadMarker", Toast.LENGTH_SHORT).show());
           String marker_url = apiCall.fetchTargetMarkerURL(marker_uuid);
           Log.d(TAG,marker_url);
 
@@ -226,12 +338,11 @@ public class HelloSceneformActivity extends AppCompatActivity {
           config.setAugmentedImageDatabase(augmentedImageDatabase);
           session.configure(config); //Pushing the new configuration into the current ARCore settings
           arFragment.getArSceneView().setupSession(session);
-          runOnUiThread(()-> Toast.makeText(this, Integer.toString(augmentedImageDatabase.getNumImages()), Toast.LENGTH_SHORT).show());
-          SetUpExperience();
+          SetupExperience();
       });
       thread.start();
   }
-public void SetUpExperience(){
+public void SetupExperience(){
       Thread getDataThread = new Thread(()->{
           Log.e(TAG, "SetupExperience: " + current_uuid);
           Log.d(TAG, metaData); //meta data contains JSON of all the data associated with each component of the experience
@@ -262,8 +373,9 @@ public void SetUpExperience(){
                   runOnUiThread(() -> {
                       AugmentedAssetNode node = new AugmentedAssetNode(this, assetInfoObject);
                       AssetNodes.add(node);
-                      arFragment.getArSceneView().getScene().addChild(node);
                   });
+
+                  Log.d("AssetNodes:",Integer.toString(AssetNodes.size()));
               }
           }catch (JSONException e){
               e.printStackTrace();
