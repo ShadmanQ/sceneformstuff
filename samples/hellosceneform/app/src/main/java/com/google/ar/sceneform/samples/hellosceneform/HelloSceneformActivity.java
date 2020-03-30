@@ -17,8 +17,11 @@ package com.google.ar.sceneform.samples.hellosceneform;
 
 import android.app.Activity;
 import android.app.ActivityManager;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
@@ -28,6 +31,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.Toast;
 import com.google.ar.core.Anchor;
@@ -127,7 +131,7 @@ public boolean shouldWatermark = false;
                       JSONObject reader = new JSONObject(response);
                       String marker_uuid = reader.getString("marker_uuid");
                       DownloadMarker(marker_uuid);
-                      runOnUiThread(()-> Toast.makeText(this, marker_uuid, Toast.LENGTH_SHORT).show());
+                 //     runOnUiThread(()-> Toast.makeText(this, marker_uuid, Toast.LENGTH_SHORT).show());
                       Thread fetchThread = new Thread(()-> {
                           String test = api.fetchARContentAssetURL(marker_uuid);
                           DownloadMarker(marker_uuid);
@@ -200,6 +204,7 @@ public boolean shouldWatermark = false;
           return;
       }
       Collection<AugmentedImage> updatedAugmentedImages = frame.getUpdatedTrackables(AugmentedImage.class);
+ //    runOnUiThread(()-> Toast.makeText(this, "This is the size: " + Integer.toString(updatedAugmentedImages.size()), Toast.LENGTH_SHORT).show());
       for (AugmentedImage augmentedImage : updatedAugmentedImages){
           switch (augmentedImage.getTrackingState()) { //Check if ARCore is tracking it
               case PAUSED://read up on what this is!!
@@ -291,6 +296,36 @@ public boolean shouldWatermark = false;
 
   }
 
+    public void createAlertDialog(String title, String message, String btnText, String postAction) {
+        AlertDialog myAlert;
+        myAlert = new AlertDialog.Builder(this).create();
+        myAlert.setCancelable(false);
+        myAlert.setTitle(title);
+        myAlert.setMessage(message);
+        myAlert.setButton(AlertDialog.BUTTON_NEGATIVE, btnText,
+                (dialog, which) -> {
+                    switch (postAction) {
+                        case "QUIT":
+                            finishAffinity();
+                            break;
+                        case "DISMISS":
+                            myAlert.dismiss();
+                            break;
+                        case "blueRectScan()":
+                    //        runOnUiThread(() -> userInterface.setBlueRectIntro());
+                            break;
+                        case "update":
+                            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.kreatar.postrealityviewer")));
+                            myAlert.dismiss();
+                            break;
+                    }
+
+                });
+        Objects.requireNonNull(myAlert.getWindow()).setFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+//        myAlert.show();
+        myAlert.show();
+    }
+
   private void DownloadMarker(String marker_uuid){
       API apiCall = new API();
       AssetNodes = new ArrayList<>();
@@ -303,9 +338,6 @@ public boolean shouldWatermark = false;
 
           Bitmap bitmap = apiCall.DownloadImageToBitmap(marker_url);
 
-          if (bitmap.getHeight()!=0){
-              runOnUiThread(()-> Toast.makeText(this, "there is a bitmap present of height " +bitmap.getHeight(), Toast.LENGTH_SHORT).show());
-          }
 
           AugmentedImageBitmap = bitmap;
           current_uuid = marker_uuid;
@@ -324,6 +356,41 @@ public boolean shouldWatermark = false;
               //userInterface.getPosterName().setText(ImageName);
           } catch (JSONException ignored) {
           }
+          try {
+              JSONArray arContent = new JSONObject(metaData).getJSONArray("asset_transform_info");//Reading the metaData JSON
+              int numberOfARAssets = arContent.length();
+              if (numberOfARAssets == 0) {
+                  runOnUiThread(() -> {
+                      createAlertDialog("No Components Found", "An experience has been found, but there are no components", "Dismiss", "blueRectScan()");
+                    //  scanningThread.stopScanAnimation();
+                      //ResetState();
+//                        takePhoto();
+                  });
+                  return;
+              }
+          } catch (Exception e) {
+              runOnUiThread(() -> {
+                  Log.e(TAG, "Error: " + e);
+                  //createAlertDialog("No Components Found", "An experience has been found, but there are no components", "Dismiss", "blueRectScan()");
+                  //runOnUiThread(() -> scanningThread.stopScanAnimation());
+                  //ResetState();
+//                    takePhoto();
+              });
+              return;
+          }
+          String finalImageName = ImageName;
+
+       //   runOnUiThread(()-> Toast.makeText(this, finalImageName, Toast.LENGTH_SHORT).show());
+
+          runOnUiThread(()->{
+              Toast toast = new Toast(this);
+              ImageView view = new ImageView(this);
+              view.setImageBitmap(AugmentedImageBitmap);
+              toast.setView(view);
+              toast.show();
+                  }
+          );
+
 
           Session session = arFragment.getArSceneView().getSession();// reconfiguring ARCore session to include the new image
 
@@ -338,7 +405,6 @@ public boolean shouldWatermark = false;
           config.setAugmentedImageDatabase(augmentedImageDatabase);
           session.configure(config); //Pushing the new configuration into the current ARCore settings
           arFragment.getArSceneView().setupSession(session);
-          SetupExperience();
       });
       thread.start();
   }
