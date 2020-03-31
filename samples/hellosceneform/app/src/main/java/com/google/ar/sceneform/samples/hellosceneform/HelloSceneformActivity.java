@@ -44,6 +44,7 @@ import com.google.ar.core.Plane;
 import com.google.ar.core.Session;
 import com.google.ar.core.TrackingState;
 import com.google.ar.sceneform.AnchorNode;
+import com.google.ar.sceneform.FrameTime;
 import com.google.ar.sceneform.rendering.ModelRenderable;
 import com.google.ar.sceneform.rendering.Renderable;
 import com.google.ar.sceneform.rendering.ViewRenderable;
@@ -405,10 +406,114 @@ public boolean shouldWatermark = false;
           config.setAugmentedImageDatabase(augmentedImageDatabase);
           session.configure(config); //Pushing the new configuration into the current ARCore settings
           arFragment.getArSceneView().setupSession(session);
+          arFragment.getArSceneView().getScene().addOnUpdateListener(this::onUpdateFrame);
       });
       thread.start();
   }
-public void SetupExperience(){
+
+    @RequiresApi(api = VERSION_CODES.P)
+    private void onUpdateFrame(FrameTime frameTime) {
+        Frame frame = arFragment.getArSceneView().getArFrame();
+
+        // If there is no frame or ARCore is not tracking yet, just return.
+        if (frame == null || frame.getCamera().getTrackingState() != TrackingState.TRACKING) {
+            return;
+        }
+        Collection<AugmentedImage> updatedAugmentedImages = frame.getUpdatedTrackables(AugmentedImage.class);
+        runOnUiThread(()-> Toast.makeText(this, "size of UpdatedAugmentedImages=" + updatedAugmentedImages.size(), Toast.LENGTH_SHORT).show());
+        for (AugmentedImage augmentedImage : updatedAugmentedImages) { //For each image in database
+//            markerUpdated = true;
+            switch (augmentedImage.getTrackingState()) { //Check if ARCore is tracking it
+                case PAUSED://read up on what this is!!
+                    // When an image is in PAUSED state, but the camera is not PAUSED, it has been detected,
+                    //runOnUiThread(() -> userInterface.viewDuringPause(true, shouldWatermark));
+
+                    String text = "Detected Image " + augmentedImage.getIndex();
+                    Log.d(TAG, "onUpdateFrame: " + text);
+                    break;
+
+                case TRACKING: //if Tracking -> do this
+//                    found = true;
+                    if (metaData == null) {
+                        //Alert Dialog if experience contained no data.
+//                        runOnUiThread(() -> createAlertDialog("Experience contains no data. ", "Poster experience found. Experience contains no data.", "DISMISS", "blueRectScan()"));
+//                        runOnUiThread(() -> {
+//                            userInterface.getScanButton().setOnClickListener(view -> ResetState());
+//                            userInterface.getScanButton().setImageResource(R.drawable.retake_button);
+//                        });
+                    //    ResetState();
+//                        takePhoto();
+                        return;
+                    }
+
+                    if (augmentedImage.getTrackingMethod() == AugmentedImage.TrackingMethod.FULL_TRACKING) {
+                        //runOnUiThread(() -> userInterface.viewDuringPause(false, shouldWatermark));
+//                        found = true;
+
+                        if (splashSetup) {
+//                            found = true;
+                            splashNode.setImage(augmentedImage);
+                            arFragment.getArSceneView().getScene().addChild(splashNode);
+                            splashSetup = false;
+                        }
+
+                        if (!setupStarted) {
+                            setupStarted = true;
+                            splashSetup = true;
+                            Thread thread = new Thread(() -> SetupExperience());
+                            thread.start();
+//                            removeImageAnchors(augmentedImage.getIndex());
+                        }
+
+                        if (!tracking && experienceLoaded) { //if experience is loaded, start adding all the components...is done to only happen once
+                            tracking = true;
+
+                            splashNode.RemoveAnchor(this);
+
+                            //for GA.. start experience timer
+                            AnalyticsManager.startStopWatch();
+                            AnalyticsManager.startExperienceTimer();
+
+                            Log.d(TAG, "onUpdateFrame: Adding Nodes");
+//                            ImageView imageView = findViewById(ViewId);
+
+                            if (AssetNodes.size() != 0) {
+                                for (AugmentedAssetNode node : AssetNodes) {
+                                    node.RemoveAnchor(this);
+                                }
+                            }
+
+                            for (AugmentedAssetNode node : AssetNodes) {
+                                node.setImage(augmentedImage);
+                                arFragment.getArSceneView().getScene().addChild(node);
+                            }
+                        }
+                    } else if (augmentedImage.getTrackingMethod() == AugmentedImage.TrackingMethod.LAST_KNOWN_POSE) {
+                        //TODO: Implement Not tracking logic
+                        AnalyticsManager.pauseExperienceTimer();
+                       // runOnUiThread(() -> userInterface.viewDuringPause(true, shouldWatermark));
+                    } else {
+                        //TODO: Implement Not tracking logic
+                        AnalyticsManager.pauseExperienceTimer();
+                        tracking = false;
+                    }
+                    break;
+                case STOPPED:
+                    tracking = false;
+
+                    //for GA.. stops the experience timer
+                    AnalyticsManager.pauseExperienceTimer();
+                    AnalyticsManager.pauseStopWatch();
+
+                    break;
+            }
+        }
+
+
+
+    }
+
+    public void SetupExperience(){
       Thread getDataThread = new Thread(()->{
           Log.e(TAG, "SetupExperience: " + current_uuid);
           Log.d(TAG, metaData); //meta data contains JSON of all the data associated with each component of the experience
