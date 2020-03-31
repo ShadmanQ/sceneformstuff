@@ -131,12 +131,11 @@ public boolean shouldWatermark = false;
                     try {
                       JSONObject reader = new JSONObject(response);
                       String marker_uuid = reader.getString("marker_uuid");
-                      DownloadMarker(marker_uuid);
+                      //DownloadMarker(marker_uuid);
                  //     runOnUiThread(()-> Toast.makeText(this, marker_uuid, Toast.LENGTH_SHORT).show());
                       Thread fetchThread = new Thread(()-> {
                           String test = api.fetchARContentAssetURL(marker_uuid);
                           DownloadMarker(marker_uuid);
-                          UpdateExperience();
 
                       });
                       fetchThread.start();
@@ -192,111 +191,6 @@ public boolean shouldWatermark = false;
     return true;
   }
 
-  @RequiresApi(api = VERSION_CODES.P)
-  private void UpdateExperience(){
-
-      Frame frame = arFragment.getArSceneView().getArFrame();
-
-//        if(splashNode == null)
-//            runOnUiThread(() -> splashNode = new ExperienceSplashImageNode(this));
-
-      // If there is no frame or ARCore is not tracking yet, just return.
-      if (frame == null || frame.getCamera().getTrackingState() != TrackingState.TRACKING) {
-          return;
-      }
-      Collection<AugmentedImage> updatedAugmentedImages = frame.getUpdatedTrackables(AugmentedImage.class);
- //    runOnUiThread(()-> Toast.makeText(this, "This is the size: " + Integer.toString(updatedAugmentedImages.size()), Toast.LENGTH_SHORT).show());
-      for (AugmentedImage augmentedImage : updatedAugmentedImages){
-          switch (augmentedImage.getTrackingState()) { //Check if ARCore is tracking it
-              case PAUSED://read up on what this is!!
-                  // When an image is in PAUSED state, but the camera is not PAUSED, it has been detected,
-            //      runOnUiThread(() -> userInterface.viewDuringPause(true, shouldWatermark));
-
-                  String text = "Detected Image " + augmentedImage.getIndex();
-                  Log.d(TAG, "onUpdateFrame: " + text);
-                  break;
-
-              case TRACKING: //if Tracking -> do this
-//                    found = true;
-                  if (metaData == null) {
-                      //Alert Dialog if experience contained no data.
-//                        runOnUiThread(() -> createAlertDialog("Experience contains no data. ", "Poster experience found. Experience contains no data.", "DISMISS", "blueRectScan()"));
-//                        runOnUiThread(() -> {
-//                            userInterface.getScanButton().setOnClickListener(view -> ResetState());
-//                            userInterface.getScanButton().setImageResource(R.drawable.retake_button);
-//                        });
-               //       ResetState();
-//                        takePhoto();
-                      return;
-                  }
-
-                  if (augmentedImage.getTrackingMethod() == AugmentedImage.TrackingMethod.FULL_TRACKING) {
-      //                runOnUiThread(() -> userInterface.viewDuringPause(false, shouldWatermark));
-//                        found = true;
-
-                      if (splashSetup) {
-//                            found = true;
-                          splashNode.setImage(augmentedImage);
-                          arFragment.getArSceneView().getScene().addChild(splashNode);
-                          splashSetup = false;
-                      }
-
-                      if (!setupStarted) {
-                          setupStarted = true;
-                          splashSetup = true;
-                          Thread thread = new Thread(() -> SetupExperience());
-                          thread.start();
-//                            removeImageAnchors(augmentedImage.getIndex());
-                      }
-
-                      if (!tracking && experienceLoaded) { //if experience is loaded, start adding all the components...is done to only happen once
-                          tracking = true;
-
-                          splashNode.RemoveAnchor(this);
-
-                          //for GA.. start experience timer
-                          AnalyticsManager.startStopWatch();
-                          AnalyticsManager.startExperienceTimer();
-
-                          Log.d(TAG, "onUpdateFrame: Adding Nodes");
-//                            ImageView imageView = findViewById(ViewId);
-
-                          if (AssetNodes.size() != 0) {
-                              for (AugmentedAssetNode node : AssetNodes) {
-                                  node.RemoveAnchor(this);
-                              }
-                          }
-
-                          for (AugmentedAssetNode node : AssetNodes) {
-                              node.setImage(augmentedImage);
-                              arFragment.getArSceneView().getScene().addChild(node);
-                          }
-                      }
-                  } else if (augmentedImage.getTrackingMethod() == AugmentedImage.TrackingMethod.LAST_KNOWN_POSE) {
-                      //TODO: Implement Not tracking logic
-                      AnalyticsManager.pauseExperienceTimer();
-                    //  runOnUiThread(() -> userInterface.viewDuringPause(true, shouldWatermark));
-                  } else {
-                      //TODO: Implement Not tracking logic
-                      AnalyticsManager.pauseExperienceTimer();
-                      tracking = false;
-                  }
-                  break;
-              case STOPPED:
-                  tracking = false;
-
-                  //for GA.. stops the experience timer
-                  AnalyticsManager.pauseExperienceTimer();
-                  AnalyticsManager.pauseStopWatch();
-
-                  break;
-          }
-
-      }
-
-
-  }
-
     public void createAlertDialog(String title, String message, String btnText, String postAction) {
         AlertDialog myAlert;
         myAlert = new AlertDialog.Builder(this).create();
@@ -327,6 +221,7 @@ public boolean shouldWatermark = false;
         myAlert.show();
     }
 
+  @RequiresApi(api = VERSION_CODES.P)
   private void DownloadMarker(String marker_uuid){
       API apiCall = new API();
       AssetNodes = new ArrayList<>();
@@ -360,6 +255,7 @@ public boolean shouldWatermark = false;
           try {
               JSONArray arContent = new JSONObject(metaData).getJSONArray("asset_transform_info");//Reading the metaData JSON
               int numberOfARAssets = arContent.length();
+              runOnUiThread(()-> Toast.makeText(this, "There are " + numberOfARAssets + " AR assets", Toast.LENGTH_SHORT).show());
               if (numberOfARAssets == 0) {
                   runOnUiThread(() -> {
                       createAlertDialog("No Components Found", "An experience has been found, but there are no components", "Dismiss", "blueRectScan()");
@@ -406,113 +302,13 @@ public boolean shouldWatermark = false;
           config.setAugmentedImageDatabase(augmentedImageDatabase);
           session.configure(config); //Pushing the new configuration into the current ARCore settings
           arFragment.getArSceneView().setupSession(session);
-          arFragment.getArSceneView().getScene().addOnUpdateListener(this::onUpdateFrame);
+          SetupExperience();
+         // arFragment.getArSceneView().getScene().addOnUpdateListener(this::SetupExperience);
       });
       thread.start();
   }
 
     @RequiresApi(api = VERSION_CODES.P)
-    private void onUpdateFrame(FrameTime frameTime) {
-        Frame frame = arFragment.getArSceneView().getArFrame();
-
-        // If there is no frame or ARCore is not tracking yet, just return.
-        if (frame == null || frame.getCamera().getTrackingState() != TrackingState.TRACKING) {
-            return;
-        }
-        Collection<AugmentedImage> updatedAugmentedImages = frame.getUpdatedTrackables(AugmentedImage.class);
-        runOnUiThread(()-> Toast.makeText(this, "size of UpdatedAugmentedImages=" + updatedAugmentedImages.size(), Toast.LENGTH_SHORT).show());
-        for (AugmentedImage augmentedImage : updatedAugmentedImages) { //For each image in database
-//            markerUpdated = true;
-            switch (augmentedImage.getTrackingState()) { //Check if ARCore is tracking it
-                case PAUSED://read up on what this is!!
-                    // When an image is in PAUSED state, but the camera is not PAUSED, it has been detected,
-                    //runOnUiThread(() -> userInterface.viewDuringPause(true, shouldWatermark));
-
-                    String text = "Detected Image " + augmentedImage.getIndex();
-                    Log.d(TAG, "onUpdateFrame: " + text);
-                    break;
-
-                case TRACKING: //if Tracking -> do this
-//                    found = true;
-                    if (metaData == null) {
-                        //Alert Dialog if experience contained no data.
-//                        runOnUiThread(() -> createAlertDialog("Experience contains no data. ", "Poster experience found. Experience contains no data.", "DISMISS", "blueRectScan()"));
-//                        runOnUiThread(() -> {
-//                            userInterface.getScanButton().setOnClickListener(view -> ResetState());
-//                            userInterface.getScanButton().setImageResource(R.drawable.retake_button);
-//                        });
-                    //    ResetState();
-//                        takePhoto();
-                        return;
-                    }
-
-                    if (augmentedImage.getTrackingMethod() == AugmentedImage.TrackingMethod.FULL_TRACKING) {
-                        //runOnUiThread(() -> userInterface.viewDuringPause(false, shouldWatermark));
-//                        found = true;
-
-                        if (splashSetup) {
-//                            found = true;
-                            splashNode.setImage(augmentedImage);
-                            arFragment.getArSceneView().getScene().addChild(splashNode);
-                            splashSetup = false;
-                        }
-
-                        if (!setupStarted) {
-                            setupStarted = true;
-                            splashSetup = true;
-                            Thread thread = new Thread(() -> SetupExperience());
-                            thread.start();
-//                            removeImageAnchors(augmentedImage.getIndex());
-                        }
-
-                        if (!tracking && experienceLoaded) { //if experience is loaded, start adding all the components...is done to only happen once
-                            tracking = true;
-
-                            splashNode.RemoveAnchor(this);
-
-                            //for GA.. start experience timer
-                            AnalyticsManager.startStopWatch();
-                            AnalyticsManager.startExperienceTimer();
-
-                            Log.d(TAG, "onUpdateFrame: Adding Nodes");
-//                            ImageView imageView = findViewById(ViewId);
-
-                            if (AssetNodes.size() != 0) {
-                                for (AugmentedAssetNode node : AssetNodes) {
-                                    node.RemoveAnchor(this);
-                                }
-                            }
-
-                            for (AugmentedAssetNode node : AssetNodes) {
-                                node.setImage(augmentedImage);
-                                arFragment.getArSceneView().getScene().addChild(node);
-                            }
-                        }
-                    } else if (augmentedImage.getTrackingMethod() == AugmentedImage.TrackingMethod.LAST_KNOWN_POSE) {
-                        //TODO: Implement Not tracking logic
-                        AnalyticsManager.pauseExperienceTimer();
-                       // runOnUiThread(() -> userInterface.viewDuringPause(true, shouldWatermark));
-                    } else {
-                        //TODO: Implement Not tracking logic
-                        AnalyticsManager.pauseExperienceTimer();
-                        tracking = false;
-                    }
-                    break;
-                case STOPPED:
-                    tracking = false;
-
-                    //for GA.. stops the experience timer
-                    AnalyticsManager.pauseExperienceTimer();
-                    AnalyticsManager.pauseStopWatch();
-
-                    break;
-            }
-        }
-
-
-
-    }
-
     public void SetupExperience(){
       Thread getDataThread = new Thread(()->{
           Log.e(TAG, "SetupExperience: " + current_uuid);
@@ -528,6 +324,8 @@ public boolean shouldWatermark = false;
                   JSONObject assetInfoObject = assetInfo.getJSONObject(i);
                   String uuid = assetInfoObject.getString("uuid");
                   String type = assetInfoObject.getString("type");
+                  String source = assetInfoObject.getString("source");
+                  Log.d("SOURCE",source);
 
                   try {
                       if ((type.equals("message") || type.equals("link"))) {

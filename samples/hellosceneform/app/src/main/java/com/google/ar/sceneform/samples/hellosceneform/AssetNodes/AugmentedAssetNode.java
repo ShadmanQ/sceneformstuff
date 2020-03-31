@@ -21,6 +21,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.RequiresApi;
 
@@ -52,6 +53,7 @@ import static java.lang.Math.abs;
 import static java.lang.Math.asin;
 import static java.lang.Math.atan2;
 import static java.lang.Math.copySign;
+import static java.lang.Math.log;
 import static java.lang.Math.toDegrees;
 import static java.lang.Thread.sleep;
 
@@ -133,6 +135,7 @@ public class AugmentedAssetNode extends AnchorNode {
         width = 0;
         height = 0;
         componentScale = 1;
+
         try {
             xPos = (float) assetInfo.getJSONObject("position").getDouble("x");
             yPos = (float) assetInfo.getJSONObject("position").getDouble("y");
@@ -177,11 +180,19 @@ public class AugmentedAssetNode extends AnchorNode {
                             String uuid = null;
                             try {
                                 uuid = assetInfo.getString("uuid");
+                                Log.d("UUID_AAN",uuid);
                             } catch (JSONException e) {
                                 e.printStackTrace();
                             }
                             String url = apiCall.fetchARContentAssetURL(uuid);
                             Bitmap bitmap = apiCall.DownloadImageToBitmap(url);
+                            activity.runOnUiThread(()->{
+                                Toast toast = new Toast(activityContext);
+                                ImageView view = new ImageView(activityContext);
+                                view.setImageBitmap(bitmap);
+                                toast.setView(view);
+                                toast.show();
+                            });
 //                        CreateNode(context, R.drawable.image_icon, bitmap);
 
                             CreateImageAsset(context, 0, bitmap);
@@ -482,6 +493,7 @@ public class AugmentedAssetNode extends AnchorNode {
                         }
                         String url = apiCall.fetchARContentAssetURL(uuid);
                         Bitmap bitmap = apiCall.DownloadImageToBitmap(url);
+
 //                        CreateNode(context, R.drawable.image_icon, bitmap);
 
                         CreateImageAsset(context, 0, bitmap);
