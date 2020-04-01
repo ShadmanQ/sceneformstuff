@@ -35,25 +35,20 @@ import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.Toast;
 import com.google.ar.core.Anchor;
-import com.google.ar.core.AugmentedImage;
 import com.google.ar.core.AugmentedImageDatabase;
 import com.google.ar.core.Config;
-import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.core.Session;
-import com.google.ar.core.TrackingState;
 import com.google.ar.sceneform.AnchorNode;
-import com.google.ar.sceneform.FrameTime;
 import com.google.ar.sceneform.rendering.ModelRenderable;
-import com.google.ar.sceneform.rendering.Renderable;
 import com.google.ar.sceneform.rendering.ViewRenderable;
 import com.google.ar.sceneform.samples.hellosceneform.utils.AnalyticsManager;
 import com.google.ar.sceneform.samples.hellosceneform.AssetNodes.AugmentedAssetNode;
 import com.google.ar.sceneform.samples.hellosceneform.AssetNodes.ExperienceSplashImageNode;
 import com.google.ar.sceneform.ux.ArFragment;
-import com.google.ar.sceneform.ux.TransformableNode;
 import com.google.ar.sceneform.samples.hellosceneform.utils.API;
+import com.google.ar.sceneform.ux.TransformableNode;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -63,6 +58,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * This is an example activity that uses the Sceneform UX package to make common AR tasks easier.
@@ -100,9 +96,68 @@ public boolean shouldWatermark = false;
       return;
     }
 
+    Thread startThread = new Thread(()->{
+        String test_string = api.fetchARExperienceByExpID("d4f74b5e-1ddf-11ea-9a0b-1fd7f8b74283");
+        Log.d("THREAD",test_string);
+        try {
+            JSONObject reader = new JSONObject(test_string);
+            String marker_uuid = reader.getString("marker_uuid");
+            Log.d("START_THREAD",marker_uuid);
+            String response = api.fetchARExperience(marker_uuid);
+            Thread inner_thread = new Thread(()->{
+                String marker_url = api.fetchTargetMarkerURL(marker_uuid);
+                Bitmap bitmap = api.DownloadImageToBitmap(marker_uuid);
+                try {
+                    JSONArray assetInfo = new JSONObject(metaData).getJSONArray("asset_transform_info");
+                    if (assetInfo.length()==0){
+                        runOnUiThread(()-> Toast.makeText(this, "No asset info", Toast.LENGTH_SHORT).show());
+                    }
+                    for (int i = 0; i < assetInfo.length(); i++) {
+                        JSONObject assetInfoObject = assetInfo.getJSONObject(i);
+                        String uuid = assetInfoObject.getString("uuid");
+                        String type = assetInfoObject.getString("type");
+                        String source = assetInfoObject.getString("source");
+                        Log.d("type",type);
+
+                        try {
+                            if ((type.equals("message") || type.equals("link"))) {
+                                if (assetInfoObject.getString("text").isEmpty())
+                                    continue;
+                            }
+
+                            if (!(type.equals("image") || type.equals("text"))) {
+                                AnalyticsManager.addEngagementAnalytic(uuid);
+                            }
+                        } catch (JSONException e){
+
+                        }
+                            AugmentedAssetNode node = new AugmentedAssetNode(this, assetInfoObject);
+                            AssetNodes.add(node);
+                            if (AssetNodes.size() > 0){
+                                Log.d("START_THREAD","SIZE IS NON-ZERO");
+                            }
+                    }
+                }catch (JSONException e){
+                    e.printStackTrace();
+                }
+                Log.d("AssetNodes:",Integer.toString(AssetNodes.size()));
+            });
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+
+    });
+
+    startThread.start();
+
     setContentView(R.layout.activity_ux);
     arFragment = (CustomARFragment) getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
     Log.d("TAG", "Custom Fragment created");
+
+    //runOnUiThread(()-> Toast.makeText(this, "Now Downloading Marker", Toast.LENGTH_SHORT).show());
+   // DownloadMarker("d4f74b5e-1ddf-11ea-9a0b-1fd7f8b74283");
 
     // When you build a Renderable, Sceneform loads its resources in the background while returning
     // a CompletableFuture. Call thenAccept(), handle(), or check isDone() before calling get().
@@ -119,12 +174,28 @@ public boolean shouldWatermark = false;
               return null;
             });
 
+
+    ImageView view = new ImageView(this);
+    view.setImageDrawable(getResources().getDrawable(R.drawable.simp));
+
+    AtomicReference<ViewRenderable> viewrender = null;
+
+    ViewRenderable.builder()
+            .setView(this,view)
+            .build()
+    .thenAccept(renderable -> testRenderable = renderable)
+            .exceptionally(
+                    throwable -> {
+                        Toast.makeText(this, "haha no", Toast.LENGTH_SHORT).show();
+                        return null;
+                    }
+            );
+
     arFragment.setOnTapArPlaneListener(
         (HitResult hitResult, Plane plane, MotionEvent motionEvent) -> {
           if (andyRenderable == null) {
             return;
           }
-
             Thread thread = new Thread(()->{
                     String response = api.fetchARExperienceByExpID("d4f74b5e-1ddf-11ea-9a0b-1fd7f8b74283");
                     Log.d("API Response",response);
@@ -134,7 +205,6 @@ public boolean shouldWatermark = false;
                       //DownloadMarker(marker_uuid);
                  //     runOnUiThread(()-> Toast.makeText(this, marker_uuid, Toast.LENGTH_SHORT).show());
                       Thread fetchThread = new Thread(()-> {
-                          String test = api.fetchARContentAssetURL(marker_uuid);
                           DownloadMarker(marker_uuid);
 
                       });
@@ -146,19 +216,28 @@ public boolean shouldWatermark = false;
         }
           );
             thread.start();
+            Anchor anchor = hitResult.createAnchor();
+            AnchorNode anchorNode = new AnchorNode((anchor));
+            anchorNode.setParent(arFragment.getArSceneView().getScene());
+            TransformableNode simp = new TransformableNode(arFragment.getTransformationSystem());
+            simp.setParent(anchorNode);
+            simp.setRenderable(testRenderable);
+            simp.select();
 
-          // Create the Anchor.
-          Anchor anchor = hitResult.createAnchor();
-          AnchorNode anchorNode = new AnchorNode(anchor);
-          anchorNode.setParent(arFragment.getArSceneView().getScene());
 
-          // Create the transformable andy and add it to the anchor.
+
+//          // Create the Anchor.
+//          Anchor anchor = hitResult.createAnchor();
+//          AnchorNode anchorNode = new AnchorNode(anchor);
+//          anchorNode.setParent(arFragment.getArSceneView().getScene());
+//
+//          // Create the transformable andy and add it to the anchor.
           TransformableNode andy = new TransformableNode(arFragment.getTransformationSystem());
-
+//
           andy.setParent(anchorNode);
-
+//
           andy.setRenderable(andyRenderable);
-          andy.select();
+//          andy.select();
         });
   }
 
@@ -233,8 +312,6 @@ public boolean shouldWatermark = false;
           Log.d(TAG,marker_url);
 
           Bitmap bitmap = apiCall.DownloadImageToBitmap(marker_url);
-
-
           AugmentedImageBitmap = bitmap;
           current_uuid = marker_uuid;
 
@@ -278,15 +355,15 @@ public boolean shouldWatermark = false;
           String finalImageName = ImageName;
 
        //   runOnUiThread(()-> Toast.makeText(this, finalImageName, Toast.LENGTH_SHORT).show());
-
-          runOnUiThread(()->{
-              Toast toast = new Toast(this);
-              ImageView view = new ImageView(this);
-              view.setImageBitmap(AugmentedImageBitmap);
-              toast.setView(view);
-              toast.show();
-                  }
-          );
+//
+//          runOnUiThread(()->{
+//              Toast toast = new Toast(this);
+//              ImageView view = new ImageView(this);
+//              view.setImageBitmap(AugmentedImageBitmap);
+//              toast.setView(view);
+//              toast.show();
+//                  }
+//          );
 
 
           Session session = arFragment.getArSceneView().getSession();// reconfiguring ARCore session to include the new image

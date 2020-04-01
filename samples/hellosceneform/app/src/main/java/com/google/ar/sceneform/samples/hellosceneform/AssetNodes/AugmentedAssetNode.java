@@ -186,13 +186,13 @@ public class AugmentedAssetNode extends AnchorNode {
                             }
                             String url = apiCall.fetchARContentAssetURL(uuid);
                             Bitmap bitmap = apiCall.DownloadImageToBitmap(url);
-                            activity.runOnUiThread(()->{
-                                Toast toast = new Toast(activityContext);
-                                ImageView view = new ImageView(activityContext);
-                                view.setImageBitmap(bitmap);
-                                toast.setView(view);
-                                toast.show();
-                            });
+//                            activity.runOnUiThread(()->{
+//                                Toast toast = new Toast(activityContext);
+//                                ImageView view = new ImageView(activityContext);
+//                                view.setImageBitmap(bitmap);
+//                                toast.setView(view);
+//                                toast.show();
+//                            });
 //                        CreateNode(context, R.drawable.image_icon, bitmap);
 
                             CreateImageAsset(context, 0, bitmap);
@@ -676,6 +676,8 @@ public class AugmentedAssetNode extends AnchorNode {
                         .build();
             }
         });
+
+        Log.d("CREATEIMAGEASSET","Asset has been created");
     }
 
     @RequiresApi(api = Build.VERSION_CODES.P)
